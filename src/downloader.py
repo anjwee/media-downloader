@@ -26,9 +26,9 @@ def print_welcome():
     """打印欢迎信息"""
     print('='*50)
     print('欢迎使用 Media Downloader!')
-    print(f'当前用户: {os.getenv("USERNAME", "未知用户")}')
+    print(f'当前用户: anjwee')
     print(f'版本: 1.0.0')
-    print(f'时间: {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
+    print(f'时间: 2025-04-22 20:06:32 UTC')
     print('='*50)
     print('\n提示:')
     print('- 所有文件将保存到系统下载文件夹')
@@ -146,6 +146,12 @@ class MediaDownloader:
                         '3': 'ba/b',  # 最佳音频
                         '4': 'worst'  # 最低质量
                     }.get(format_choice, 'bv*+ba/b'),
+                    'outtmpl': f'{output_path}/%(title)s.%(ext)s',
+                    'progress_hooks': [progress_hook],
+                    'quiet': False,
+                    'no_warnings': True,
+                    'ignoreerrors': True
+                }
                 
                 # 音频特殊处理
                 if format_choice == '3':
@@ -175,21 +181,14 @@ class MediaDownloader:
                     if not info:
                         raise Exception("无法获取视频信息")
                     
-                    # 获取视频信息
                     title = info.get('title', '未知标题')
                     duration = info.get('duration')
-                    formats = info.get('formats', [])
                     
                     print(f'\n标题: {title}')
                     if duration:
                         minutes = duration // 60
                         seconds = duration % 60
                         print(f'时长: {minutes}分{seconds}秒')
-                    
-                    # 检查格式可用性
-                    if not formats:
-                        print("\n警告：未找到可用格式，尝试使用备用格式...")
-                        self.ydl_opts['format'] = 'best[ext=mp4]/best'
                     
                     print('\n开始下载...')
                     print('下载过程中请勿关闭窗口...')
@@ -203,18 +202,6 @@ class MediaDownloader:
                 retry_count += 1
                 last_error = str(e)
                 error_msg = get_error_message(e)
-                
-                # 处理特定错误
-                if 'Requested format is not available' in str(e):
-                    print("\n当前格式不可用，尝试备用格式...")
-                    self.ydl_opts['format'] = 'best[ext=mp4]/best'
-                    continue
-                elif 'Sign in to confirm' in str(e):
-                    print("\n需要 YouTube cookies 来验证身份，请：")
-                    print("1. 确保已登录 YouTube")
-                    print("2. 输入 'w' 重新导入 cookies")
-                    break
-                    
                 print(f'\n下载出错 (尝试 {retry_count}/{max_retries}): {error_msg}')
                 
                 if retry_count < max_retries:
@@ -224,11 +211,10 @@ class MediaDownloader:
                     print('正在重试...')
                 else:
                     print('\n下载失败，建议：')
-                    print('1. 尝试使用其他格式选项（如选项4：最低质量）')
+                    print('1. 直接使用命令: yt-dlp "视频URL"')
                     print('2. 检查网络连接是否稳定')
-                    print('3. 确认视频是否可以正常访问')
-                    print('4. 更新 cookies 文件')
-                    print('5. 检查代理设置是否正确')
+                    print('3. 尝试更新 yt-dlp: pip install --upgrade yt-dlp')
+                    print('4. 检查代理设置是否正确')
                     self.log_download(url, title, False, last_error)
                     break
 
