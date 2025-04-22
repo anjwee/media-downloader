@@ -1,6 +1,9 @@
 ﻿#!/bin/bash
 echo "=== Media Downloader 一键安装脚本 ==="
 
+# 设置安装目录
+INSTALL_DIR="$HOME/media-downloader"
+
 # 安装必需的包
 if command -v apt-get &> /dev/null; then
     echo "正在安装必要的软件包..."
@@ -16,11 +19,15 @@ echo "正在安装 yt-dlp..."
 python3 -m pip install --upgrade pip
 python3 -m pip install --upgrade yt-dlp
 
+# 创建并进入安装目录
+echo "正在创建安装目录..."
+rm -rf "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+cd "$INSTALL_DIR" || exit 1
+
 # 克隆项目
 echo "正在克隆项目..."
-rm -rf media-downloader
-git clone https://github.com/anjwee/media-downloader.git
-cd media-downloader
+git clone https://github.com/anjwee/media-downloader.git .
 
 # 安装依赖
 echo "正在安装依赖..."
@@ -31,8 +38,7 @@ mkdir -p downloads
 
 # 创建快捷命令
 echo "创建快捷命令 'yt'..."
-SCRIPT_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
-COMMAND_ALIAS="alias yt='cd $(pwd) && python3 src/downloader.py'"
+COMMAND_ALIAS="alias yt='cd $INSTALL_DIR && python3 src/downloader.py'"
 
 # 添加到多个可能的配置文件中
 for config_file in ~/.bashrc ~/.bash_profile ~/.zshrc; do
@@ -46,10 +52,9 @@ done
 
 # 创建全局命令
 echo "创建全局命令..."
-INSTALL_PATH=$(pwd)
 sudo tee /usr/local/bin/yt << EOL
 #!/bin/bash
-cd $INSTALL_PATH && python3 src/downloader.py
+cd "$INSTALL_DIR" && python3 src/downloader.py
 EOL
 
 # 使脚本可执行
@@ -63,7 +68,7 @@ echo -e "\n是否现在运行下载器？(y/n)"
 read -p "> " choice
 
 if [[ $choice == "y" || $choice == "Y" ]]; then
-    cd "$INSTALL_PATH" && python3 src/downloader.py
+    cd "$INSTALL_DIR" && python3 src/downloader.py
 else
     echo "您可以稍后使用 'yt' 命令启动下载器"
 fi
