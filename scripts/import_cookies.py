@@ -8,11 +8,14 @@ def import_cookies():
         'cookies.txt'
     )
     
-    print("\n导入 Cookies")
-    print("请粘贴 Netscape 格式的 cookies 文本")
-    print("粘贴完成后按 Ctrl+D (Linux) 或 Ctrl+Z (Windows) 结束输入")
-    print("注意: 第一行必须是 '# Netscape HTTP Cookie File'")
-    print("\n开始粘贴:")
+    print("\n=== 导入 Cookies ===")
+    print("1. 请粘贴 Netscape 格式的 cookies 文本")
+    print("2. 粘贴完成后按 Enter 换行")
+    print("3. 然后按以下快捷键结束输入：")
+    print("   - Linux 系统：按 Ctrl + D")
+    print("   - Windows 系统：按 Ctrl + Z 再按 Enter")
+    print("\n注意: 第一行必须是 '# Netscape HTTP Cookie File'")
+    print("\n现在开始粘贴:")
     
     try:
         # 读取用户输入直到 EOF
