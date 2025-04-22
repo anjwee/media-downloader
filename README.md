@@ -2,6 +2,20 @@
 
 一个简单的媒体下载工具，支持从多个平台下载视频和音频。
 
+## 一键安装和运行
+
+### Linux/Mac 用户
+打开终端，复制粘贴下面的命令：
+```bash
+curl -fsSL https://raw.githubusercontent.com/anjwee/media-downloader/main/quick_install.sh | bash
+```
+
+### Windows 用户 
+打开 PowerShell，复制粘贴下面的命令：
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/anjwee/media-downloader/main/quick_install.ps1" -OutFile "quick_install.ps1"; .\quick_install.ps1
+```
+
 ## 功能特点
 
 - 支持多种下载质量选项
@@ -10,32 +24,23 @@
 - 友好的命令行界面
 - 支持错误处理和提示
 
-### Linux/Mac 用户
-打开终端，复制粘贴下面的命令：
+## 手动安装说明
+
+1. 安装 yt-dlp（必需）：
 ```bash
-curl -fsSL https://raw.githubusercontent.com/anjwee/media-downloader/main/quick_install.sh | bash
-
-### Windows 用户 
-打开 PowerShell，复制粘贴下面的命令：
-```bash
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/anjwee/media-downloader/main/quick_install.ps1" -OutFile "quick_install.ps1"; .\quick_install.ps1
-
-## 安装说明
-
-1. 安装yt-dlp（必需）：
 pip install yt-dlp
-
-Code
+```
 
 2. 克隆仓库：
-git clone https://github.com/anjwee/media-downloader.git cd media-downloader
-
-Code
+```bash
+git clone https://github.com/anjwee/media-downloader.git
+cd media-downloader
+```
 
 3. 安装其他依赖：
+```bash
 pip install -r requirements.txt
-
-Code
+```
 
 ## 前置要求
 
@@ -47,16 +52,16 @@ Code
 ## 使用方法
 
 1. 运行程序：
+```bash
 python src/downloader.py
-
-Code
+```
 
 2. 按照提示输入视频URL
 3. 选择下载质量选项：
-- 1: 最高质量的视频和音频
-- 2: 最佳视频和音频（分别下载后合并）
-- 3: 仅下载音频（MP3格式）
-- 4: 最低质量（节省空间）
+   - 1: 最高质量的视频和音频
+   - 2: 最佳视频和音频（分别下载后合并）
+   - 3: 仅下载音频（MP3格式）
+   - 4: 最低质量（节省空间）
 
 ## 注意事项
 
@@ -78,4 +83,4 @@ Code
 
 ## 许可证
 
-MIT License
+MIT License © [anjwee](https://github.com/anjwee)
