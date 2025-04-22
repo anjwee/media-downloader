@@ -31,13 +31,38 @@ mkdir -p downloads
 
 # 创建快捷命令
 echo "创建快捷命令 'yt'..."
-echo 'alias yt="python3 '$(pwd)'/src/downloader.py"' >> ~/.bashrc
-echo 'alias yt="python3 '$(pwd)'/src/downloader.py"' >> ~/.zshrc
-source ~/.bashrc 2>/dev/null || source ~/.zshrc 2>/dev/null
+SCRIPT_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+COMMAND_ALIAS="alias yt='cd $(pwd) && python3 src/downloader.py'"
 
-# 运行程序
-echo "启动下载器..."
-python3 src/downloader.py
+# 添加到多个可能的配置文件中
+for config_file in ~/.bashrc ~/.bash_profile ~/.zshrc; do
+    if [ -f "$config_file" ]; then
+        # 移除旧的别名（如果存在）
+        sed -i '/alias yt=/d' "$config_file"
+        # 添加新的别名
+        echo "$COMMAND_ALIAS" >> "$config_file"
+    fi
+done
 
-echo -e "\n安装完成！现在您可以使用 'yt' 命令来启动下载器。"
-echo "如果 'yt' 命令不生效，请重新打开终端或运行 'source ~/.bashrc'"
+# 创建全局命令
+echo "创建全局命令..."
+sudo tee /usr/local/bin/yt << 'EOL'
+#!/bin/bash
+cd /root/media-downloader && python3 src/downloader.py
+EOL
+
+# 使脚本可执行
+sudo chmod +x /usr/local/bin/yt
+
+echo -e "\n安装完成！"
+echo "您可以使用以下方式运行下载器："
+echo "1. 输入 'yt' 命令"
+echo "2. 或者进入 media-downloader 目录运行 'python3 src/downloader.py'"
+echo -e "\n是否现在运行下载器？(y/n)"
+read -p "> " choice
+
+if [[ $choice == "y" || $choice == "Y" ]]; then
+    cd /root/media-downloader && python3 src/downloader.py
+else
+    echo "您可以稍后使用 'yt' 命令启动下载器"
+fi
