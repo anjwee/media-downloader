@@ -57,7 +57,9 @@ python src/downloader.py
 ```
 
 安装完成后，您可以：
+
 • 直接使用 `yt` 命令启动下载器
+
 • 如果 `yt` 命令不生效，请重新打开终端或运行 `source ~/.bashrc`
 
 2. 按照提示输入视频URL
