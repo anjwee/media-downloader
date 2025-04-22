@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import shutil
+import json
 from typing import Dict, Any
 from datetime import datetime
 from config import get_format_options
@@ -12,14 +13,36 @@ class MediaDownloader:
     def __init__(self):
         self.ydl_opts: Dict[str, Any] = {}
         self.start_time = datetime.utcnow()
+        # 下载历史文件路径
         self.download_history_file = os.path.join(
             os.path.expanduser('~/Downloads'), 
             'media_downloader_history.txt'
         )
+        # cookies 文件路径 (与项目文件在同一目录)
+        self.cookies_file = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'cookies.txt'
+        )
+
+    def check_cookies(self) -> bool:
+        """检查 cookies 文件是否存在且有效"""
+        if os.path.exists(self.cookies_file):
+            try:
+                with open(self.cookies_file, 'r', encoding='utf-8') as f:
+                    first_line = f.readline().strip()
+                    # 检查是否是 Netscape 格式的 cookie 文件
+                    return first_line.startswith('# Netscape HTTP Cookie File')
+            except Exception as e:
+                print(f"检查 cookies 文件时出错: {str(e)}")
+                return False
+        return False
     
     def log_download(self, url: str, title: str, success: bool, error_msg: str = None):
         """记录下载历史"""
         try:
+            if not os.path.exists(os.path.dirname(self.download_history_file)):
+                os.makedirs(os.path.dirname(self.download_history_file))
+                
             with open(self.download_history_file, 'a', encoding='utf-8') as f:
                 timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
                 status = "成功" if success else "失败"
@@ -30,6 +53,22 @@ class MediaDownloader:
         except Exception as e:
             print(f"警告: 无法记录下载历史 - {str(e)}")
 
+    def get_proxy_settings(self) -> Dict[str, str]:
+        """获取代理设置（如果存在）"""
+        proxy_file = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'proxy.txt'
+        )
+        if os.path.exists(proxy_file):
+            try:
+                with open(proxy_file, 'r') as f:
+                    proxy_url = f.read().strip()
+                if proxy_url:
+                    return {'proxy': proxy_url}
+            except Exception as e:
+                print(f"读取代理设置失败: {str(e)}")
+        return {}
+
     def download_media(self, url: str, format_choice: str) -> None:
         max_retries = 3
         retry_count = 0
@@ -38,25 +77,51 @@ class MediaDownloader:
         
         while retry_count < max_retries:
             try:
-                # 使用系统下载文件夹
                 output_path = os.path.expanduser('~/Downloads')
                 if not os.path.exists(output_path):
                     os.makedirs(output_path)
                 
                 # 配置下载选项
                 self.ydl_opts = get_format_options(format_choice)
-                self.ydl_opts.update({
+                
+                # 基本配置
+                base_opts = {
                     'progress_hooks': [progress_hook],
                     'outtmpl': f'{output_path}/%(title)s.%(ext)s',
-                    'fragment-retries': 10,        # 片段重试次数
-                    'retries': 10,                 # 整体重试次数
-                    'file_access_retries': 10,     # 文件访问重试次数
-                    'quiet': False,                # 显示详细日志
-                    'verbose': True,               # 显示更多调试信息
-                    'socket_timeout': 30,          # 套接字超时时间
-                    'concurrent_fragment_downloads': 1,  # 并发下载数
-                    'http_chunk_size': 10485760,   # 10MB 块大小
-                })
+                    'fragment-retries': 10,
+                    'retries': 10,
+                    'file_access_retries': 10,
+                    'quiet': False,
+                    'verbose': True,
+                    'socket_timeout': 30,
+                    'concurrent_fragment_downloads': 1,
+                    'http_chunk_size': 10485760,
+                    'extract_flat': True,  # 防止某些视频信息提取失败
+                    'http_headers': {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        'Accept-Language': 'en-us,en;q=0.5',
+                        'Sec-Fetch-Mode': 'navigate',
+                        'Accept-Encoding': 'gzip, deflate',
+                        'DNT': '1',
+                    }
+                }
+                
+                # 添加 cookies 支持
+                if self.check_cookies():
+                    base_opts['cookies'] = self.cookies_file
+                    print("已加载 cookies 文件")
+                else:
+                    print("警告: 未找到有效的 cookies 文件，某些视频可能无法下载")
+                
+                # 添加代理支持
+                proxy_settings = self.get_proxy_settings()
+                if proxy_settings:
+                    base_opts.update(proxy_settings)
+                    print(f"使用代理: {proxy_settings['proxy']}")
+                
+                # 更新下载选项
+                self.ydl_opts.update(base_opts)
                 
                 with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
                     print(f'\n正在获取媒体信息... (尝试 {retry_count + 1}/{max_retries})')
@@ -98,8 +163,9 @@ class MediaDownloader:
                     print('1. 检查网络连接是否稳定')
                     print('2. 尝试使用其他格式选项（如选项4：最低质量）')
                     print('3. 确认视频是否可以正常访问')
-                    print('4. 尝试更新 yt-dlp (pip install --upgrade yt-dlp)')
-                    print('5. 检查是否需要使用代理')
+                    print('4. 更新 cookies 文件')
+                    print('5. 检查 VPS 是否可以访问 YouTube')
+                    print('6. 检查代理设置是否正确')
                     self.log_download(url, title, False, last_error)
                     break
 
@@ -153,6 +219,8 @@ def print_welcome():
     print('\n提示:')
     print('- 所有文件将保存到系统下载文件夹')
     print('- 如遇下载问题，将自动重试')
+    print('- 支持从文件加载 cookies')
+    print('- 支持配置代理')
     print('- 输入 q 可随时退出程序')
 
 def main():
