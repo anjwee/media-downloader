@@ -8,8 +8,10 @@ class MediaDownloader:
     def __init__(self):
         self.ydl_opts: Dict[str, Any] = {}
     
-    def download_media(self, url: str, format_choice: str, output_path: str = './downloads') -> None:
+    def download_media(self, url: str, format_choice: str) -> None:
         try:
+            # 使用系统下载文件夹
+            output_path = os.path.expanduser('~/Downloads')
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
             
@@ -64,9 +66,8 @@ def main():
             print('无效的选项，使用默认选项1')
             format_choice = '1'
             
-        output_path = os.path.join(os.getcwd(), 'downloads')
-        downloader.download_media(url, format_choice, output_path)
-        print('\n文件已保存到:', output_path)
+        downloader.download_media(url, format_choice)
+        print('\n文件已保存到:', os.path.expanduser('~/Downloads'))
 
 if __name__ == '__main__':
     main()
