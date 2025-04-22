@@ -10,6 +10,16 @@
 - 友好的命令行界面
 - 支持错误处理和提示
 
+### Linux/Mac 用户
+打开终端，复制粘贴下面的命令：
+```bash
+curl -fsSL https://raw.githubusercontent.com/anjwee/media-downloader/main/quick_install.sh | bash
+
+### Windows 用户 
+打开 PowerShell，复制粘贴下面的命令：
+```bash
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/anjwee/media-downloader/main/quick_install.ps1" -OutFile "quick_install.ps1"; .\quick_install.ps1
+
 ## 安装说明
 
 1. 安装yt-dlp（必需）：
