@@ -9,6 +9,19 @@ from datetime import datetime
 from config import get_format_options
 from utils import progress_hook, get_error_message
 
+def check_installation():
+    """检查程序安装状态"""
+    try:
+        result = subprocess.run(['pip', 'list'], capture_output=True, text=True)
+        if 'media-downloader' in result.stdout:
+            return True
+        else:
+            print("警告: media-downloader 未正确安装")
+            return False
+    except Exception as e:
+        print(f"检查安装状态时出错: {str(e)}")
+        return False
+
 def print_welcome():
     """打印欢迎信息"""
     print('='*50)
@@ -38,12 +51,25 @@ class MediaDownloader:
     def __init__(self):
         self.ydl_opts: Dict[str, Any] = {}
         self.start_time = datetime.utcnow()
+        self.has_ffmpeg = False
+        
+        # 检查 ffmpeg
+        try:
+            subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.has_ffmpeg = True
+        except FileNotFoundError:
+            print("\n警告: 未检测到 ffmpeg，某些功能可能受限")
+            print("建议安装 ffmpeg:")
+            print("- Debian/Ubuntu: sudo apt-get install ffmpeg")
+            print("- CentOS/RHEL: sudo yum install ffmpeg")
+            print("- Alpine: apk add ffmpeg\n")
+        
         # 下载历史文件路径
         self.download_history_file = os.path.join(
             os.path.expanduser('~/Downloads'), 
             'media_downloader_history.txt'
         )
-        # cookies 文件路径 (与项目文件在同一目录)
+        # cookies 文件路径
         self.cookies_file = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             'cookies.txt'
@@ -100,6 +126,7 @@ class MediaDownloader:
         return {}
 
     def download_media(self, url: str, format_choice: str) -> None:
+        """下载媒体文件"""
         max_retries = 3
         retry_count = 0
         last_error = None
@@ -112,64 +139,76 @@ class MediaDownloader:
                     os.makedirs(output_path)
                 
                 # 配置下载选项
-                self.ydl_opts = get_format_options(format_choice)
-                
-                # 基本配置
-                base_opts = {
-                    'progress_hooks': [progress_hook],
+                self.ydl_opts = {
+                    'format': {
+                        '1': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                        '2': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+                        '3': 'bestaudio/best',
+                        '4': '18/worst[ext=mp4]/worst'
+                    }.get(format_choice, 'best[ext=mp4]/best'),
                     'outtmpl': f'{output_path}/%(title)s.%(ext)s',
-                    'fragment-retries': 10,
+                    'progress_hooks': [progress_hook],
+                    'merge_output_format': 'mp4',
                     'retries': 10,
+                    'fragment-retries': 10,
                     'file_access_retries': 10,
                     'quiet': False,
-                    'verbose': False,
                     'no_warnings': True,
+                    'ignoreerrors': True,
+                    'nocheckcertificate': True,
                     'socket_timeout': 30,
-                    'concurrent_fragment_downloads': 1,
                     'http_chunk_size': 10485760,
-                    'extract_flat': False,
-                    'cookiesfrombrowser': None,  # 禁用浏览器 cookies
                     'http_headers': {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                         'Accept-Language': 'en-us,en;q=0.5',
                         'Sec-Fetch-Mode': 'navigate',
-                        'Accept-Encoding': 'gzip, deflate',
-                        'DNT': '1',
                     }
                 }
                 
+                # 音频特殊处理
+                if format_choice == '3':
+                    self.ydl_opts.update({
+                        'postprocessors': [{
+                            'key': 'FFmpegExtractAudio',
+                            'preferredcodec': 'mp3',
+                            'preferredquality': '192',
+                        }]
+                    })
+                
                 # 添加 cookies 支持
                 if self.check_cookies():
-                    base_opts['cookiefile'] = self.cookies_file
+                    self.ydl_opts['cookiefile'] = self.cookies_file
                     print("成功加载 cookies 文件")
-                else:
-                    print("警告: 未找到有效的 cookies 文件，某些视频可能无法下载")
                 
                 # 添加代理支持
                 proxy_settings = self.get_proxy_settings()
                 if proxy_settings:
-                    base_opts.update(proxy_settings)
+                    self.ydl_opts.update(proxy_settings)
                     print(f"使用代理: {proxy_settings['proxy']}")
-                
-                # 更新下载选项
-                self.ydl_opts.update(base_opts)
                 
                 with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
                     print(f'\n正在获取媒体信息... (尝试 {retry_count + 1}/{max_retries})')
                     info = ydl.extract_info(url, download=False)
+                    
+                    if not info:
+                        raise Exception("无法获取视频信息")
+                    
+                    # 获取视频信息
                     title = info.get('title', '未知标题')
                     duration = info.get('duration')
-                    filesize = info.get('filesize')
+                    formats = info.get('formats', [])
                     
                     print(f'\n标题: {title}')
                     if duration:
                         minutes = duration // 60
                         seconds = duration % 60
                         print(f'时长: {minutes}分{seconds}秒')
-                    if filesize:
-                        size_mb = filesize / (1024 * 1024)
-                        print(f'文件大小: {size_mb:.1f} MB')
+                    
+                    # 检查格式可用性
+                    if not formats:
+                        print("\n警告：未找到可用格式，尝试使用备用格式...")
+                        self.ydl_opts['format'] = 'best[ext=mp4]/best'
                     
                     print('\n开始下载...')
                     print('下载过程中请勿关闭窗口...')
@@ -183,13 +222,19 @@ class MediaDownloader:
                 retry_count += 1
                 last_error = str(e)
                 error_msg = get_error_message(e)
-                print(f'\n下载出错 (尝试 {retry_count}/{max_retries}): {error_msg}')
                 
-                if 'Sign in to confirm' in str(e):
+                # 处理特定错误
+                if 'Requested format is not available' in str(e):
+                    print("\n当前格式不可用，尝试备用格式...")
+                    self.ydl_opts['format'] = 'best[ext=mp4]/best'
+                    continue
+                elif 'Sign in to confirm' in str(e):
                     print("\n需要 YouTube cookies 来验证身份，请：")
                     print("1. 确保已登录 YouTube")
                     print("2. 输入 'w' 重新导入 cookies")
                     break
+                    
+                print(f'\n下载出错 (尝试 {retry_count}/{max_retries}): {error_msg}')
                 
                 if retry_count < max_retries:
                     wait_time = 5 * retry_count
@@ -198,12 +243,11 @@ class MediaDownloader:
                     print('正在重试...')
                 else:
                     print('\n下载失败，建议：')
-                    print('1. 检查网络连接是否稳定')
-                    print('2. 尝试使用其他格式选项（如选项4：最低质量）')
+                    print('1. 尝试使用其他格式选项（如选项4：最低质量）')
+                    print('2. 检查网络连接是否稳定')
                     print('3. 确认视频是否可以正常访问')
                     print('4. 更新 cookies 文件')
-                    print('5. 检查 VPS 是否可以访问 YouTube')
-                    print('6. 检查代理设置是否正确')
+                    print('5. 检查代理设置是否正确')
                     self.log_download(url, title, False, last_error)
                     break
 
@@ -277,6 +321,9 @@ def uninstall():
         sys.exit(1)
 
 def main():
+    # 检查安装状态
+    check_installation()
+    
     downloader = MediaDownloader()
     print_welcome()
     
