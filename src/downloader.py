@@ -141,30 +141,11 @@ class MediaDownloader:
                 # 配置下载选项
                 self.ydl_opts = {
                     'format': {
-                        '1': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                        '2': 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-                        '3': 'bestaudio/best',
-                        '4': '18/worst[ext=mp4]/worst'
-                    }.get(format_choice, 'best[ext=mp4]/best'),
-                    'outtmpl': f'{output_path}/%(title)s.%(ext)s',
-                    'progress_hooks': [progress_hook],
-                    'merge_output_format': 'mp4',
-                    'retries': 10,
-                    'fragment-retries': 10,
-                    'file_access_retries': 10,
-                    'quiet': False,
-                    'no_warnings': True,
-                    'ignoreerrors': True,
-                    'nocheckcertificate': True,
-                    'socket_timeout': 30,
-                    'http_chunk_size': 10485760,
-                    'http_headers': {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'en-us,en;q=0.5',
-                        'Sec-Fetch-Mode': 'navigate',
-                    }
-                }
+                        '1': 'bv*+ba/b',  # 使用更通用的格式选择
+                        '2': 'bv*[height<=1080]+ba/b',  # 限制最大分辨率为 1080p
+                        '3': 'ba/b',  # 最佳音频
+                        '4': 'worst'  # 最低质量
+                    }.get(format_choice, 'bv*+ba/b'),
                 
                 # 音频特殊处理
                 if format_choice == '3':
