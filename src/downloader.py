@@ -1,5 +1,7 @@
 import yt_dlp
 import os
+import shutil
+import sys
 from typing import Dict, Any
 from config import get_format_options
 from utils import progress_hook, get_error_message
@@ -15,7 +17,6 @@ class MediaDownloader:
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
             
-            # 获取下载选项并添加进度钩子
             self.ydl_opts = get_format_options(format_choice)
             self.ydl_opts.update({
                 'progress_hooks': [progress_hook],
@@ -41,13 +42,39 @@ class MediaDownloader:
             error_msg = get_error_message(e)
             print(f'\n{error_msg}')
 
+def uninstall():
+    """卸载程序"""
+    try:
+        # 删除 Windows 的快捷命令
+        bat_path = "C:\\Windows\\yt.bat"
+        if os.path.exists(bat_path):
+            os.remove(bat_path)
+        
+        # 获取当前目录的上级目录（项目根目录）
+        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # 删除整个项目目录
+        shutil.rmtree(current_dir)
+        
+        print("\n卸载成功！感谢您的使用！")
+        print("按任意键退出...")
+        input()
+        sys.exit(0)
+    except Exception as e:
+        print(f"\n卸载过程中出现错误: {str(e)}")
+        print("请手动删除项目文件夹。")
+        print("按任意键退出...")
+        input()
+        sys.exit(1)
+
 def show_menu():
     print('\n请选择下载格式：')
     print('1. 最高质量的视频和音频')
     print('2. 最佳视频和音频（分别下载后合并）')
     print('3. 仅下载音频（MP3格式）')
     print('4. 最低质量（节省空间）')
-    return input('请输入选项 (1-4): ')
+    print('5. 卸载程序')
+    return input('请输入选项 (1-5): ')
 
 def main():
     downloader = MediaDownloader()
@@ -62,6 +89,12 @@ def main():
             break
             
         format_choice = show_menu()
+        if format_choice == '5':
+            confirm = input('\n确定要卸载程序吗？这将删除所有程序文件 (y/n): ')
+            if confirm.lower() == 'y':
+                uninstall()
+            continue
+            
         if format_choice not in ['1', '2', '3', '4']:
             print('无效的选项，使用默认选项1')
             format_choice = '1'
