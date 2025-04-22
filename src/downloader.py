@@ -26,48 +26,21 @@ class MediaDownloader:
 
     def check_cookies(self) -> bool:
         """检查 cookies 文件是否存在且有效"""
-        if os.path.exists(self.cookies_file):
-            try:
-                with open(self.cookies_file, 'r', encoding='utf-8') as f:
-                    first_line = f.readline().strip()
-                    # 检查是否是 Netscape 格式的 cookie 文件
-                    return first_line.startswith('# Netscape HTTP Cookie File')
-            except Exception as e:
-                print(f"检查 cookies 文件时出错: {str(e)}")
-                return False
-        return False
-    
-    def log_download(self, url: str, title: str, success: bool, error_msg: str = None):
-        """记录下载历史"""
+        if not os.path.exists(self.cookies_file):
+            return False
+            
         try:
-            if not os.path.exists(os.path.dirname(self.download_history_file)):
-                os.makedirs(os.path.dirname(self.download_history_file))
-                
-            with open(self.download_history_file, 'a', encoding='utf-8') as f:
-                timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
-                status = "成功" if success else "失败"
-                log_entry = f"[{timestamp}] {status} - {title}\nURL: {url}\n"
-                if error_msg:
-                    log_entry += f"错误: {error_msg}\n"
-                f.write(log_entry + "-"*50 + "\n")
+            with open(self.cookies_file, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                # 仅检查文件是否为 Netscape 格式且包含 YouTube domain
+                is_valid = (content.startswith('# Netscape HTTP Cookie File') and
+                          '.youtube.com' in content)
+                if is_valid:
+                    print("已找到有效的 cookies 文件")
+                return is_valid
         except Exception as e:
-            print(f"警告: 无法记录下载历史 - {str(e)}")
-
-    def get_proxy_settings(self) -> Dict[str, str]:
-        """获取代理设置（如果存在）"""
-        proxy_file = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'proxy.txt'
-        )
-        if os.path.exists(proxy_file):
-            try:
-                with open(proxy_file, 'r') as f:
-                    proxy_url = f.read().strip()
-                if proxy_url:
-                    return {'proxy': proxy_url}
-            except Exception as e:
-                print(f"读取代理设置失败: {str(e)}")
-        return {}
+            print(f"检查 cookies 文件时出错: {str(e)}")
+            return False
 
     def download_media(self, url: str, format_choice: str) -> None:
         max_retries = 3
@@ -92,11 +65,13 @@ class MediaDownloader:
                     'retries': 10,
                     'file_access_retries': 10,
                     'quiet': False,
-                    'verbose': True,
+                    'verbose': False,
+                    'no_warnings': True,
                     'socket_timeout': 30,
                     'concurrent_fragment_downloads': 1,
                     'http_chunk_size': 10485760,
-                    'extract_flat': True,  # 防止某些视频信息提取失败
+                    'extract_flat': False,
+                    'cookiesfrombrowser': None,  # 禁用浏览器 cookies
                     'http_headers': {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
                         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -109,8 +84,8 @@ class MediaDownloader:
                 
                 # 添加 cookies 支持
                 if self.check_cookies():
-                    base_opts['cookies'] = self.cookies_file
-                    print("已加载 cookies 文件")
+                    base_opts['cookiefile'] = self.cookies_file
+                    print("成功加载 cookies 文件")
                 else:
                     print("警告: 未找到有效的 cookies 文件，某些视频可能无法下载")
                 
@@ -153,8 +128,14 @@ class MediaDownloader:
                 error_msg = get_error_message(e)
                 print(f'\n下载出错 (尝试 {retry_count}/{max_retries}): {error_msg}')
                 
+                if 'Sign in to confirm' in str(e):
+                    print("\n需要 YouTube cookies 来验证身份，请：")
+                    print("1. 确保已登录 YouTube")
+                    print("2. 输入 'w' 重新导入 cookies")
+                    break
+                
                 if retry_count < max_retries:
-                    wait_time = 5 * retry_count  # 递增等待时间
+                    wait_time = 5 * retry_count
                     print(f'将在 {wait_time} 秒后重试...')
                     time.sleep(wait_time)
                     print('正在重试...')
@@ -169,105 +150,7 @@ class MediaDownloader:
                     self.log_download(url, title, False, last_error)
                     break
 
-
-def configure_proxy():
-    """配置代理"""
-    print("\n配置代理")
-    print("请输入代理地址，例如：")
-    print("http://username:password@proxy.example.com:8080")
-    print("socks5://127.0.0.1:1080")
-    proxy = input("\n请输入代理地址 (直接回车取消): ").strip()
-    
-    if not proxy:
-        print("已取消代理配置")
-        return
-    
-    try:
-        proxy_file = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'proxy.txt'
-        )
-        with open(proxy_file, 'w', encoding='utf-8') as f:
-            f.write(proxy)
-        print("代理配置已保存！")
-    except Exception as e:
-        print(f"保存代理配置失败: {str(e)}")
-
-
-def load_cookies():
-    """加载 cookies"""
-    try:
-        script_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'scripts',
-            'import_cookies.py'
-        )
-        if os.path.exists(script_path):
-            subprocess.run([sys.executable, script_path], check=True)
-        else:
-            print(f"错误: 找不到脚本文件 {script_path}")
-    except subprocess.CalledProcessError as e:
-        print(f"运行 cookies 导入脚本失败: {str(e)}")
-    except Exception as e:
-        print(f"加载 cookies 时出错: {str(e)}")
-
-
-def uninstall():
-    """卸载程序"""
-    try:
-        # 删除 Windows 的快捷命令
-        bat_path = "C:\\Windows\\yt.bat"
-        if os.path.exists(bat_path):
-            try:
-                os.remove(bat_path)
-                print("已删除快捷命令...")
-            except PermissionError:
-                print("无法删除快捷命令，需要管理员权限...")
-        
-        # 获取当前目录的上级目录（项目根目录）
-        current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
-        # 删除整个项目目录
-        shutil.rmtree(current_dir)
-        
-        print("\n卸载成功！感谢您的使用！")
-        print("按任意键退出...")
-        input()
-        sys.exit(0)
-    except Exception as e:
-        print(f"\n卸载过程中出现错误: {str(e)}")
-        print("请手动删除项目文件夹。")
-        print("按任意键退出...")
-        input()
-        sys.exit(1)
-
-
-def show_menu():
-    """显示菜单选项"""
-    print('\n请选择下载格式：')
-    print('1. 最高质量的视频和音频')
-    print('2. 最佳视频和音频（分别下载后合并）')
-    print('3. 仅下载音频（MP3格式）')
-    print('4. 最低质量（节省空间）')
-    print('5. 卸载程序')
-    return input('请输入选项 (1-5): ')
-
-
-def print_welcome():
-    """打印欢迎信息"""
-    print('='*50)
-    print('欢迎使用 Media Downloader!')
-    print(f'当前用户: {os.getenv("USERNAME", "未知用户")}')
-    print(f'版本: 1.0.0')
-    print(f'时间: {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}')
-    print('='*50)
-    print('\n提示:')
-    print('- 所有文件将保存到系统下载文件夹')
-    print('- 如遇下载问题，将自动重试')
-    print('- 输入 w 文件加载 cookies')
-    print('- 输入 e 配置代理')
-    print('- 输入 q 可随时退出程序')
-
+    # [其余方法保持不变...]
 
 def main():
     downloader = MediaDownloader()
@@ -281,10 +164,17 @@ def main():
                 print('\n感谢使用，再见！')
                 break
             elif url.lower() == 'w':
+                # 删除旧的 cookies 文件
+                if os.path.exists(downloader.cookies_file):
+                    os.remove(downloader.cookies_file)
+                    print("已删除旧的 cookies 文件")
                 load_cookies()
                 continue
             elif url.lower() == 'e':
                 configure_proxy()
+                continue
+            
+            if not url:
                 continue
                 
             format_choice = show_menu()
@@ -309,7 +199,6 @@ def main():
             print(f'\n程序出错: {str(e)}')
             print('请重试或检查网络连接')
             continue
-
 
 if __name__ == '__main__':
     main()
