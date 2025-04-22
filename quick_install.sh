@@ -46,9 +46,10 @@ done
 
 # 创建全局命令
 echo "创建全局命令..."
-sudo tee /usr/local/bin/yt << 'EOL'
+INSTALL_PATH=$(pwd)
+sudo tee /usr/local/bin/yt << EOL
 #!/bin/bash
-cd /root/media-downloader && python3 src/downloader.py
+cd $INSTALL_PATH && python3 src/downloader.py
 EOL
 
 # 使脚本可执行
@@ -62,7 +63,7 @@ echo -e "\n是否现在运行下载器？(y/n)"
 read -p "> " choice
 
 if [[ $choice == "y" || $choice == "Y" ]]; then
-    cd /root/media-downloader && python3 src/downloader.py
+    cd "$INSTALL_PATH" && python3 src/downloader.py
 else
     echo "您可以稍后使用 'yt' 命令启动下载器"
 fi
