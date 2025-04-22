@@ -12,7 +12,7 @@ def import_cookies():
     print("\n=== 导入 Cookies ===")
     print("1. 请从浏览器导出 YouTube cookies")
     print("2. cookies 必须包含以下关键值：")
-    print("   - CONSENT")
+    print("   - CONSENT（必需）")
     print("   - SID")
     print("   - HSID")
     print("   - SSID")
@@ -25,7 +25,9 @@ def import_cookies():
     print("4. 然后按以下快捷键结束输入：")
     print("   - Linux 系统：按 Ctrl + D")
     print("   - Windows 系统：按 Ctrl + Z 再按 Enter")
-    print("\n注意: 第一行必须是 '# Netscape HTTP Cookie File'")
+    print("\n注意: ")
+    print("- 第一行必须是 '# Netscape HTTP Cookie File'")
+    print("- CONSENT cookie 是必需的，其他cookie可选但建议都包含")
     print("\n现在开始粘贴:")
     
     try:
@@ -43,19 +45,38 @@ def import_cookies():
             return False
         
         # 验证必要的 cookies 是否存在
-        required_cookies = ['CONSENT', 'SID', 'HSID', 'SSID', 'APISID', 'SAPISID', 
-                          'LOGIN_INFO', '__Secure-1PSID', '__Secure-3PSID']
-        missing_cookies = []
+        required_cookies = ['CONSENT']  # CONSENT 是必需的
+        recommended_cookies = ['SID', 'HSID', 'SSID', 'APISID', 'SAPISID', 
+                           'LOGIN_INFO', '__Secure-1PSID', '__Secure-3PSID']
         
+        missing_required = []
+        missing_recommended = []
+        
+        # 检查必需的 cookies
         for cookie in required_cookies:
             if cookie not in cookies_text:
-                missing_cookies.append(cookie)
+                missing_required.append(cookie)
         
-        if missing_cookies:
-            print("\n警告: 缺少以下重要的 cookies:")
-            for cookie in missing_cookies:
+        # 检查推荐的 cookies
+        for cookie in recommended_cookies:
+            if cookie not in cookies_text:
+                missing_recommended.append(cookie)
+        
+        if missing_required:
+            print("\n错误: 缺少以下必需的 cookies:")
+            for cookie in missing_required:
                 print(f"- {cookie}")
-            print("\n这可能会导致某些视频无法下载或出现人机验证")
+            print("\n这些 cookie 是必需的，请确保包含它们")
+            return False
+        
+        if missing_recommended:
+            print("\n警告: 缺少以下推荐的 cookies:")
+            for cookie in missing_recommended:
+                print(f"- {cookie}")
+            print("\n虽然这些 cookie 不是必需的，但缺少它们可能会导致:")
+            print("1. 某些视频无法下载")
+            print("2. 出现人机验证")
+            print("3. 无法访问会员内容")
             confirm = input("是否仍要继续保存？(y/n): ").strip().lower()
             if confirm != 'y':
                 print("已取消保存")
@@ -66,10 +87,12 @@ def import_cookies():
             f.write(cookies_text)
             
         print(f"\nCookies 已成功保存到: {cookies_file}")
-        print("提示: 如果仍然出现人机验证，请尝试:")
-        print("1. 确保已在浏览器中登录 YouTube")
-        print("2. 重新导出完整的 cookies")
-        print("3. 使用代理服务器")
+        
+        if missing_recommended:
+            print("\n提示: 建议重新获取完整的 cookies，步骤如下:")
+            print("1. 确保已在浏览器中登录 YouTube")
+            print("2. 使用浏览器扩展（如 'Cookie Editor'）导出所有 cookies")
+            print("3. 确保导出格式为 'Netscape HTTP Cookie File'")
         return True
         
     except Exception as e:
