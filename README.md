@@ -9,6 +9,10 @@
 ```bash
 curl -fsSL https://raw.githubusercontent.com/anjwee/media-downloader/main/quick_install.sh | bash
 ```
+### Linux/Mac 强制安装
+```bash
+pip install yt_dlp --break-system-packages
+```
 
 ### Windows 用户 
 打开 PowerShell，复制粘贴下面的命令：
