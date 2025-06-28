@@ -9,6 +9,13 @@ from datetime import datetime
 from config import get_format_options
 from utils import progress_hook, get_error_message
 
+def extract_filename_from_url(url):
+    import os
+    url_path = url.split('?')[0]
+    base = os.path.basename(url_path)
+    name, _ = os.path.splitext(base)
+    return name or '%(title)s'
+
 def check_installation():
     """检查程序安装状态"""
     try:
@@ -137,14 +144,14 @@ class MediaDownloader:
                 output_path = os.path.expanduser('~/Downloads')
                 if not os.path.exists(output_path):
                     os.makedirs(output_path)
-                
-                # --- 修改这里 ---
+
+                # === 这里根据选择设置输出文件名 ===
                 if format_choice == '2':
                     base_name = extract_filename_from_url(url)
                     outtmpl = f'{output_path}/{base_name}.%(ext)s'
                 else:
                     outtmpl = f'{output_path}/%(title)s.%(ext)s'
-                # ----------------
+                # === END ===
 
                 self.ydl_opts = {
                     'format': {
@@ -153,7 +160,7 @@ class MediaDownloader:
                         '3': 'ba/b',  # 最佳音频
                         '4': 'worst'  # 最低质量
                     }.get(format_choice, 'bv*+ba/b'),
-                    'outtmpl': outtmpl,  # 用上面生成的outtmpl
+                    'outtmpl': outtmpl,
                     'progress_hooks': [progress_hook],
                     'quiet': False,
                     'no_warnings': True,
