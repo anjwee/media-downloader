@@ -131,12 +131,16 @@ class MediaDownloader:
         while retry_count < max_retries:
             try:
                 if format_choice == '2':
-                    # 方案：用yt-dlp自动合并，不手动拼文件名
                     base_name = extract_filename_from_url(url)
                     ydl_opts = {
                         'format': 'bv*[height<=1080]+ba[ext=m4a]/bestvideo+bestaudio/best',
                         'outtmpl': f'{output_path}/{base_name}.%(ext)s',
                         'merge_output_format': 'mp4',
+                        'postprocessors': [{
+                            'key': 'FFmpegVideoConvertor',
+                            'preferedformat': 'mp4',
+                        }],
+                        'keepvideo': False,
                         'quiet': False,
                         'progress_hooks': [progress_hook],
                         'no_warnings': True,
