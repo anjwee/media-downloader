@@ -14,10 +14,9 @@ def extract_filename_from_url(url):
     url_path = url.split('?')[0]
     base = os.path.basename(url_path)
     name, _ = os.path.splitext(base)
-    return name or '%(title)s'
+    return name or 'output'
 
 def check_installation():
-    """检查程序安装状态"""
     try:
         result = subprocess.run(['pip', 'list'], capture_output=True, text=True)
         if 'media-downloader' in result.stdout:
@@ -30,7 +29,6 @@ def check_installation():
         return False
 
 def print_welcome():
-    """打印欢迎信息"""
     print('='*50)
     print('欢迎使用 Media Downloader!')
     print(f'当前用户: anjwee')
@@ -45,7 +43,6 @@ def print_welcome():
     print('- 输入 q 可随时退出程序')
 
 def show_menu():
-    """显示菜单选项"""
     print('\n请选择下载格式：')
     print('1. 最高质量的视频和音频')
     print('2. 最佳视频和音频（分别下载后合并）')
@@ -60,7 +57,6 @@ class MediaDownloader:
         self.start_time = datetime.utcnow()
         self.has_ffmpeg = False
         
-        # 检查 ffmpeg
         try:
             subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.has_ffmpeg = True
@@ -71,26 +67,21 @@ class MediaDownloader:
             print("- CentOS/RHEL: sudo yum install ffmpeg")
             print("- Alpine: apk add ffmpeg\n")
         
-        # 下载历史文件路径
         self.download_history_file = os.path.join(
             os.path.expanduser('~/Downloads'), 
             'media_downloader_history.txt'
         )
-        # cookies 文件路径
         self.cookies_file = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             'cookies.txt'
         )
 
     def check_cookies(self) -> bool:
-        """检查 cookies 文件是否存在且有效"""
         if not os.path.exists(self.cookies_file):
             return False
-            
         try:
             with open(self.cookies_file, 'r', encoding='utf-8') as f:
                 content = f.read().strip()
-                # 仅检查文件是否为 Netscape 格式且包含 YouTube domain
                 is_valid = (content.startswith('# Netscape HTTP Cookie File') and
                           '.youtube.com' in content)
                 if is_valid:
@@ -101,11 +92,9 @@ class MediaDownloader:
             return False
 
     def log_download(self, url: str, title: str, success: bool, error_msg: str = None):
-        """记录下载历史"""
         try:
             if not os.path.exists(os.path.dirname(self.download_history_file)):
                 os.makedirs(os.path.dirname(self.download_history_file))
-                
             with open(self.download_history_file, 'a', encoding='utf-8') as f:
                 timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
                 status = "成功" if success else "失败"
@@ -117,7 +106,6 @@ class MediaDownloader:
             print(f"警告: 无法记录下载历史 - {str(e)}")
 
     def get_proxy_settings(self) -> Dict[str, str]:
-        """获取代理设置（如果存在）"""
         proxy_file = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             'proxy.txt'
@@ -133,91 +121,156 @@ class MediaDownloader:
         return {}
 
     def download_media(self, url: str, format_choice: str) -> None:
-        """下载媒体文件"""
         max_retries = 3
         retry_count = 0
         last_error = None
         title = "未知标题"
+        output_path = os.path.expanduser('~/Downloads')
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
         
         while retry_count < max_retries:
             try:
-                output_path = os.path.expanduser('~/Downloads')
-                if not os.path.exists(output_path):
-                    os.makedirs(output_path)
-
-                # === 这里根据选择设置输出文件名 ===
+                # ====== 选项2: 分别下载后合并 ======
                 if format_choice == '2':
                     base_name = extract_filename_from_url(url)
-                    outtmpl = f'{output_path}/{base_name}.%(ext)s'
-                else:
-                    outtmpl = f'{output_path}/%(title)s.%(ext)s'
-                # === END ===
+                    video_file = os.path.join(output_path, f"{base_name}_video.mp4")
+                    audio_file = os.path.join(output_path, f"{base_name}_audio.m4a")
+                    final_file = os.path.join(output_path, f"{base_name}.mp4")
+                    
+                    # 下载视频
+                    print("\n正在下载视频流 ...")
+                    ydl_opts_video = {
+                        'format': 'bv*[ext=mp4]+ba[ext=m4a]/bv*[ext=mp4]/bestvideo[ext=mp4]',
+                        'outtmpl': video_file,
+                        'quiet': False,
+                        'progress_hooks': [progress_hook],
+                        'no_warnings': True,
+                        'ignoreerrors': True
+                    }
+                    # 添加 cookies
+                    if self.check_cookies():
+                        ydl_opts_video['cookiefile'] = self.cookies_file
+                        print("成功加载 cookies 文件")
+                    # 添加代理
+                    proxy_settings = self.get_proxy_settings()
+                    if proxy_settings:
+                        ydl_opts_video.update(proxy_settings)
+                        print(f"使用代理: {proxy_settings['proxy']}")
 
-                self.ydl_opts = {
-                    'format': {
-                        '1': 'bv*+ba/b',  # 使用更通用的格式选择
-                        '2': 'bv*[height<=1080]+ba/b',  # 限制最大分辨率为 1080p
-                        '3': 'ba/b',  # 最佳音频
-                        '4': 'worst'  # 最低质量
-                    }.get(format_choice, 'bv*+ba/b'),
-                    'outtmpl': outtmpl,
-                    'progress_hooks': [progress_hook],
-                    'quiet': False,
-                    'no_warnings': True,
-                    'ignoreerrors': True
-                }
-                
-                # 音频特殊处理
-                if format_choice == '3':
-                    self.ydl_opts.update({
-                        'postprocessors': [{
+                    with yt_dlp.YoutubeDL(ydl_opts_video) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        if not info:
+                            raise Exception("无法获取视频信息")
+                        title = info.get('title', '未知标题')
+                        duration = info.get('duration')
+                        print(f'\n标题: {title}')
+                        if duration:
+                            minutes = duration // 60
+                            seconds = duration % 60
+                            print(f'时长: {minutes}分{seconds}秒')
+                        ydl.download([url])
+
+                    # 下载音频
+                    print("\n正在下载音频流 ...")
+                    ydl_opts_audio = {
+                        'format': 'ba[ext=m4a]/bestaudio[ext=m4a]/bestaudio',
+                        'outtmpl': audio_file,
+                        'quiet': False,
+                        'progress_hooks': [progress_hook],
+                        'no_warnings': True,
+                        'ignoreerrors': True
+                    }
+                    if self.check_cookies():
+                        ydl_opts_audio['cookiefile'] = self.cookies_file
+                    if proxy_settings:
+                        ydl_opts_audio.update(proxy_settings)
+
+                    with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+                        ydl.download([url])
+
+                    # 合并
+                    print("\n正在合并音视频 ...")
+                    if os.path.exists(video_file) and os.path.exists(audio_file):
+                        try:
+                            cmd = [
+                                "ffmpeg", "-y",
+                                "-i", video_file,
+                                "-i", audio_file,
+                                "-c:v", "copy",
+                                "-c:a", "aac",
+                                "-strict", "experimental",
+                                final_file
+                            ]
+                            subprocess.run(cmd, check=True)
+                            print(f"\n合并完成！文件已保存为: {final_file}")
+                            # 删除临时文件
+                            os.remove(video_file)
+                            os.remove(audio_file)
+                            self.log_download(url, title, True)
+                        except Exception as merge_e:
+                            print(f"合并失败: {merge_e}")
+                            self.log_download(url, title, False, str(merge_e))
+                            raise merge_e
+                    else:
+                        raise Exception("下载的文件不存在，无法合并")
+                    return
+                # ====== 其它选项 ======
+                else:
+                    if format_choice == '3':
+                        outtmpl = f'{output_path}/%(title)s.%(ext)s'
+                        postprocessors = [{
                             'key': 'FFmpegExtractAudio',
                             'preferredcodec': 'mp3',
                             'preferredquality': '192',
                         }]
-                    })
-                
-                # 添加 cookies 支持
-                if self.check_cookies():
-                    self.ydl_opts['cookiefile'] = self.cookies_file
-                    print("成功加载 cookies 文件")
-                
-                # 添加代理支持
-                proxy_settings = self.get_proxy_settings()
-                if proxy_settings:
-                    self.ydl_opts.update(proxy_settings)
-                    print(f"使用代理: {proxy_settings['proxy']}")
-                
-                with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
-                    print(f'\n正在获取媒体信息... (尝试 {retry_count + 1}/{max_retries})')
-                    info = ydl.extract_info(url, download=False)
-                    
-                    if not info:
-                        raise Exception("无法获取视频信息")
-                    
-                    title = info.get('title', '未知标题')
-                    duration = info.get('duration')
-                    
-                    print(f'\n标题: {title}')
-                    if duration:
-                        minutes = duration // 60
-                        seconds = duration % 60
-                        print(f'时长: {minutes}分{seconds}秒')
-                    
-                    print('\n开始下载...')
-                    print('下载过程中请勿关闭窗口...')
-                    ydl.download([url])
-                    
-                    print('\n下载成功！')
-                    self.log_download(url, title, True)
-                    return
-                    
+                    else:
+                        outtmpl = f'{output_path}/%(title)s.%(ext)s'
+                        postprocessors = []
+                    self.ydl_opts = {
+                        'format': {
+                            '1': 'bv*+ba/b',
+                            '3': 'ba/b',
+                            '4': 'worst'
+                        }.get(format_choice, 'bv*+ba/b'),
+                        'outtmpl': outtmpl,
+                        'progress_hooks': [progress_hook],
+                        'quiet': False,
+                        'no_warnings': True,
+                        'ignoreerrors': True
+                    }
+                    if postprocessors:
+                        self.ydl_opts['postprocessors'] = postprocessors
+                    if self.check_cookies():
+                        self.ydl_opts['cookiefile'] = self.cookies_file
+                        print("成功加载 cookies 文件")
+                    proxy_settings = self.get_proxy_settings()
+                    if proxy_settings:
+                        self.ydl_opts.update(proxy_settings)
+                        print(f"使用代理: {proxy_settings['proxy']}")
+                    with yt_dlp.YoutubeDL(self.ydl_opts) as ydl:
+                        print(f'\n正在获取媒体信息... (尝试 {retry_count + 1}/{max_retries})')
+                        info = ydl.extract_info(url, download=False)
+                        if not info:
+                            raise Exception("无法获取视频信息")
+                        title = info.get('title', '未知标题')
+                        duration = info.get('duration')
+                        print(f'\n标题: {title}')
+                        if duration:
+                            minutes = duration // 60
+                            seconds = duration % 60
+                            print(f'时长: {minutes}分{seconds}秒')
+                        print('\n开始下载...')
+                        print('下载过程中请勿关闭窗口...')
+                        ydl.download([url])
+                        print('\n下载成功！')
+                        self.log_download(url, title, True)
+                        return
             except Exception as e:
                 retry_count += 1
                 last_error = str(e)
                 error_msg = get_error_message(e)
                 print(f'\n下载出错 (尝试 {retry_count}/{max_retries}): {error_msg}')
-                
                 if retry_count < max_retries:
                     wait_time = 5 * retry_count
                     print(f'将在 {wait_time} 秒后重试...')
@@ -233,17 +286,14 @@ class MediaDownloader:
                     break
 
 def configure_proxy():
-    """配置代理"""
     print("\n配置代理")
     print("请输入代理地址，例如：")
     print("http://username:password@proxy.example.com:8080")
     print("socks5://127.0.0.1:1080")
     proxy = input("\n请输入代理地址 (直接回车取消): ").strip()
-    
     if not proxy:
         print("已取消代理配置")
         return
-    
     try:
         proxy_file = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -256,7 +306,6 @@ def configure_proxy():
         print(f"保存代理配置失败: {str(e)}")
 
 def load_cookies():
-    """加载 cookies"""
     try:
         script_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -273,9 +322,7 @@ def load_cookies():
         print(f"加载 cookies 时出错: {str(e)}")
 
 def uninstall():
-    """卸载程序"""
     try:
-        # 删除 Windows 的快捷命令
         bat_path = "C:\\Windows\\yt.bat"
         if os.path.exists(bat_path):
             try:
@@ -283,13 +330,8 @@ def uninstall():
                 print("已删除快捷命令...")
             except PermissionError:
                 print("无法删除快捷命令，需要管理员权限...")
-        
-        # 获取当前目录的上级目录（项目根目录）
         current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        
-        # 删除整个项目目录
         shutil.rmtree(current_dir)
-        
         print("\n卸载成功！感谢您的使用！")
         print("按任意键退出...")
         input()
@@ -302,21 +344,16 @@ def uninstall():
         sys.exit(1)
 
 def main():
-    # 检查安装状态
     check_installation()
-    
     downloader = MediaDownloader()
     print_welcome()
-    
     while True:
         try:
             url = input('\n请输入媒体URL (输入 q 退出, w 加载cookies, e 配置代理): ').strip()
-            
             if url.lower() == 'q':
                 print('\n感谢使用，再见！')
                 break
             elif url.lower() == 'w':
-                # 删除旧的 cookies 文件
                 if os.path.exists(downloader.cookies_file):
                     os.remove(downloader.cookies_file)
                     print("已删除旧的 cookies 文件")
@@ -325,24 +362,19 @@ def main():
             elif url.lower() == 'e':
                 configure_proxy()
                 continue
-            
             if not url:
                 continue
-                
             format_choice = show_menu()
             if format_choice == '5':
                 confirm = input('\n确定要卸载程序吗？这将删除所有程序文件 (y/n): ')
                 if confirm.lower() == 'y':
                     uninstall()
                 continue
-                
             if format_choice not in ['1', '2', '3', '4']:
                 print('无效的选项，使用默认选项1')
                 format_choice = '1'
-                
             downloader.download_media(url, format_choice)
             print('\n文件已保存到:', os.path.expanduser('~/Downloads'))
-            
         except KeyboardInterrupt:
             print('\n\n程序被用户中断')
             print('感谢使用，再见！')
