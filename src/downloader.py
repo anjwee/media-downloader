@@ -10,7 +10,6 @@ from config import get_format_options
 from utils import progress_hook, get_error_message
 
 def extract_filename_from_url(url):
-    import os
     url_path = url.split('?')[0]
     base = os.path.basename(url_path)
     name, _ = os.path.splitext(base)
@@ -56,7 +55,6 @@ class MediaDownloader:
         self.ydl_opts: Dict[str, Any] = {}
         self.start_time = datetime.utcnow()
         self.has_ffmpeg = False
-        
         try:
             subprocess.run(['ffmpeg', '-version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             self.has_ffmpeg = True
@@ -132,45 +130,101 @@ class MediaDownloader:
             try:
                 if format_choice == '2':
                     base_name = extract_filename_from_url(url)
-                    ydl_opts = {
-                        'format': 'bv*[height<=1080]+ba[ext=m4a]/bestvideo+bestaudio/best',
-                        'outtmpl': f'{output_path}/{base_name}.%(ext)s',
-                        'merge_output_format': 'mp4',
-                        'postprocessors': [{
-                            'key': 'FFmpegVideoConvertor',
-                            'preferedformat': 'mp4',
-                        }],
-                        'keepvideo': False,
-                        'quiet': False,
-                        'progress_hooks': [progress_hook],
-                        'no_warnings': True,
-                        'ignoreerrors': True,
-                    }
+                    # 先获取媒体信息，拿到格式id
+                    info = None
+                    ydl_opts_info = {}
                     if self.check_cookies():
-                        ydl_opts['cookiefile'] = self.cookies_file
-                        print("成功加载 cookies 文件")
+                        ydl_opts_info['cookiefile'] = self.cookies_file
                     proxy_settings = self.get_proxy_settings()
                     if proxy_settings:
-                        ydl_opts.update(proxy_settings)
-                        print(f"使用代理: {proxy_settings['proxy']}")
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl_opts_info.update(proxy_settings)
+                    with yt_dlp.YoutubeDL(ydl_opts_info) as ydl:
                         print(f'\n正在获取媒体信息... (尝试 {retry_count + 1}/{max_retries})')
                         info = ydl.extract_info(url, download=False)
-                        if not info:
-                            raise Exception("无法获取视频信息")
-                        title = info.get('title', '未知标题')
-                        duration = info.get('duration')
-                        print(f'\n标题: {title}')
-                        if duration:
-                            minutes = duration // 60
-                            seconds = duration % 60
-                            print(f'时长: {minutes}分{seconds}秒')
-                        print('\n开始下载...')
-                        print('下载过程中请勿关闭窗口...')
+                    if not info:
+                        raise Exception("无法获取视频信息")
+                    title = info.get('title', '未知标题')
+                    duration = info.get('duration')
+                    print(f'\n标题: {title}')
+                    if duration:
+                        minutes = duration // 60
+                        seconds = duration % 60
+                        print(f'时长: {minutes}分{seconds}秒')
+
+                    # 选最好的mp4视频和m4a音频
+                    video_fmt = None
+                    audio_fmt = None
+                    for f in info.get("formats", []):
+                        if f.get("vcodec") != "none" and f.get("acodec") == "none" and f.get("ext") == "mp4":
+                            if not video_fmt or f.get("height", 0) > video_fmt.get("height", 0):
+                                video_fmt = f
+                        if f.get("acodec") != "none" and f.get("vcodec") == "none" and f.get("ext") == "m4a":
+                            if not audio_fmt or f.get("abr", 0) > audio_fmt.get("abr", 0):
+                                audio_fmt = f
+                    if not video_fmt or not audio_fmt:
+                        raise Exception("未找到合适的视频或音频流")
+
+                    video_file = f"{output_path}/{base_name}_video.mp4"
+                    audio_file = f"{output_path}/{base_name}_audio.m4a"
+                    final_file = f"{output_path}/{base_name}.mp4"
+                    # 下载视频
+                    ydl_opts_video = {
+                        'format': f"{video_fmt['format_id']}",
+                        'outtmpl': video_file,
+                        'quiet': False,
+                        'no_warnings': True,
+                        'progress_hooks': [progress_hook],
+                        'ignoreerrors': True
+                    }
+                    if self.check_cookies():
+                        ydl_opts_video['cookiefile'] = self.cookies_file
+                    if proxy_settings:
+                        ydl_opts_video.update(proxy_settings)
+                    print("\n正在下载视频流 ...")
+                    with yt_dlp.YoutubeDL(ydl_opts_video) as ydl:
                         ydl.download([url])
-                        print(f'\n下载成功并自动合并！文件已保存为: {output_path}/{base_name}.mp4')
-                        self.log_download(url, title, True)
-                        return
+                    # 下载音频
+                    ydl_opts_audio = {
+                        'format': f"{audio_fmt['format_id']}",
+                        'outtmpl': audio_file,
+                        'quiet': False,
+                        'no_warnings': True,
+                        'progress_hooks': [progress_hook],
+                        'ignoreerrors': True
+                    }
+                    if self.check_cookies():
+                        ydl_opts_audio['cookiefile'] = self.cookies_file
+                    if proxy_settings:
+                        ydl_opts_audio.update(proxy_settings)
+                    print("\n正在下载音频流 ...")
+                    with yt_dlp.YoutubeDL(ydl_opts_audio) as ydl:
+                        ydl.download([url])
+                    # 合并
+                    print("\n正在合并音视频 ...")
+                    if os.path.exists(video_file) and os.path.exists(audio_file):
+                        cmd = [
+                            "ffmpeg", "-y",
+                            "-i", video_file,
+                            "-i", audio_file,
+                            "-c:v", "copy",
+                            "-c:a", "aac",
+                            "-strict", "-2",
+                            final_file
+                        ]
+                        try:
+                            subprocess.run(cmd, check=True)
+                            print(f"\n合并完成！文件已保存为: {final_file}")
+                            os.remove(video_file)
+                            os.remove(audio_file)
+                            self.log_download(url, title, True)
+                        except Exception as merge_e:
+                            print(f"合并失败: {merge_e}")
+                            self.log_download(url, title, False, str(merge_e))
+                            raise merge_e
+                    else:
+                        print("下载的文件不存在，无法合并")
+                        raise Exception("下载的文件不存在，无法合并")
+                    return
                 else:
                     if format_choice == '3':
                         outtmpl = f'{output_path}/%(title)s.%(ext)s'
