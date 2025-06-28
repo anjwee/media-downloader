@@ -34,7 +34,9 @@ Invoke-WebRequest -Uri "https://raw.githubusercontent.com/anjwee/media-downloade
 ```bash
 pip install yt-dlp
 ```
-
+```bash
+sudo apt install ffmpeg
+```
 2. 克隆仓库：
 ```bash
 git clone https://github.com/anjwee/media-downloader.git
