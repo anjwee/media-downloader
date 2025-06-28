@@ -66,7 +66,7 @@ class MediaDownloader:
         
         # 下载历史文件路径
         self.download_history_file = os.path.join(
-            os.path.expanduser('/home/woking/公共'), 
+            os.path.expanduser('/home/Downloads'), 
             'media_downloader_history.txt'
         )
         # cookies 文件路径
@@ -134,7 +134,7 @@ class MediaDownloader:
         
         while retry_count < max_retries:
             try:
-                output_path = os.path.expanduser('/home/woking/公共')
+                output_path = os.path.expanduser('/home/Downloads')
                 if not os.path.exists(output_path):
                     os.makedirs(output_path)
                 
@@ -327,7 +327,7 @@ def main():
                 format_choice = '1'
                 
             downloader.download_media(url, format_choice)
-            print('\n文件已保存到:', os.path.expanduser('/home/woking/公共'))
+            print('\n文件已保存到:', os.path.expanduser('/home/Downloads'))
             
         except KeyboardInterrupt:
             print('\n\n程序被用户中断')
