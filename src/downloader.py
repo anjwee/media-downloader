@@ -138,7 +138,14 @@ class MediaDownloader:
                 if not os.path.exists(output_path):
                     os.makedirs(output_path)
                 
-                # 配置下载选项
+                # --- 修改这里 ---
+                if format_choice == '2':
+                    base_name = extract_filename_from_url(url)
+                    outtmpl = f'{output_path}/{base_name}.%(ext)s'
+                else:
+                    outtmpl = f'{output_path}/%(title)s.%(ext)s'
+                # ----------------
+
                 self.ydl_opts = {
                     'format': {
                         '1': 'bv*+ba/b',  # 使用更通用的格式选择
@@ -146,7 +153,7 @@ class MediaDownloader:
                         '3': 'ba/b',  # 最佳音频
                         '4': 'worst'  # 最低质量
                     }.get(format_choice, 'bv*+ba/b'),
-                    'outtmpl': f'{output_path}/%(title)s.%(ext)s',
+                    'outtmpl': outtmpl,  # 用上面生成的outtmpl
                     'progress_hooks': [progress_hook],
                     'quiet': False,
                     'no_warnings': True,
